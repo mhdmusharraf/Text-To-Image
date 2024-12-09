@@ -1,4 +1,6 @@
-import userModel from "../models/userModel";
+import axios from 'axios';
+import userModel from "../models/userModel.js";
+import FormData from 'form-data';
 
 export const generateImage=async(req,res)=>{
     try {
@@ -10,6 +12,22 @@ export const generateImage=async(req,res)=>{
         if(user.creditBalance===0||userModel.creditBalance<0){
             return res.json({ success:false,message: "Insufficient Credit",creditBalance:user.creditBalance });
         }
+
+        const formData = new FormData();
+        FormData.append("prompt", prompt);
+        const {data}=await axios.post('https://clipdrop-api.co/text-to-image/v1',formData,{
+            headers: {
+                'x-api-key': process.env.CLIPDROP_API,
+              },
+              responseType:'arraybuffer'
+        })
+
+        const base64Image=Buffer.form(data,'binary').toString('base64');
+        const resultImage=`data:image/png;base64,${base64Image}`;
+        await userModel.findByIdAndUpdate(user._id,{creditBalance:user.creditBalance-1})
+
+        res.json({success:true,message:"Image Generated",creditBalance:user.creditBalance-1,resultImage})
+
     } catch (error) {
         console.error(error);
         res.status(500).send({ success:false,message: error.message });
