@@ -118,22 +118,58 @@ const paymentRazorpay = async (req, res) => {
       date,
     };
     const newTransaction = await transactionModel.create(transactionData);
-    const options={
-      amount:amount*100,
+    const options = {
+      amount: amount * 100,
       currency: process.env.CURRENCY,
       receipt: newTransaction._id,
-    }
-    await razorpayInstance.orders.create(options,(error,order)=>{
-      if(error){
+    };
+    await razorpayInstance.orders.create(options, (error, order) => {
+      if (error) {
         console.log(error);
         return res.json({ success: false, message: error });
       }
-      res.json({ success: true, message: "Payment Success",  order });
-    })
+      res.json({ success: true, message: "Payment Success", order });
+    });
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
   }
 };
 
-export { registerUser, loginUser, userCredits ,paymentRazorpay};
+const verifyRazorpay = async (req, res) => {
+  try {
+    const { razorpay_order_id } = req.body;
+    const orderInfo = await razorpayInstance.orders.fetch(razorpay_order_id);
+    if (orderInfo.status === "paid") {
+      const transactionData = await transactionModel.findById(
+        orderInfo.receipt
+      );
+      if (transactionData.payment) {
+        return res.json({
+          success: false,
+          message: "Payment already verified",
+        });
+      }
+      const userData = await userModel.findById(transactionData.userId);
+      const creditBalance = userData.creditBalance + transactionData.credits;
+      await userModel.findByIdAndUpdate(userData._id, { creditBalance });
+      await transactionModel.findByIdAndUpdate(transactionData._id, {
+        payment: true,
+      });
+      res.json({ success: true, message: "Credits Added" });
+    } else {
+      return res.json({ success: false, message: "Payment not verified" });
+    }
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+export {
+  registerUser,
+  loginUser,
+  userCredits,
+  paymentRazorpay,
+  verifyRazorpay,
+};
